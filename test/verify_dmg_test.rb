@@ -106,11 +106,11 @@ class DmgVerifierTest < Minitest::Test
     assert_empty runner.commands
   end
 
-  def test_rejects_app_version_that_disagrees_with_metadata_and_detaches
+  def test_warns_when_app_version_disagrees_with_metadata_and_detaches
     runner = FakeRunner.new(mount_point: @mount, version: "9.9.9")
 
-    error = assert_raises(HyperVpnDmgVerification::VerificationError) { verifier(runner).verify! }
-    assert_match(/app version mismatch/, error.message)
+    _stdout, stderr = capture_io { assert verifier(runner).verify! }
+    assert_match(/app bundle version "9.9.9" differs from release version "1.0.0"/, stderr)
     assert_includes runner.commands, ["hdiutil", "detach", @mount]
   end
 

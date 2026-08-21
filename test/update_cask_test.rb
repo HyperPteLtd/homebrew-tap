@@ -48,10 +48,27 @@ class UpdateCaskTest < Minitest::Test
     assert_includes updated, 'version "1.1.0"'
     assert_includes updated, "sha256 \"#{NEW_SHA}\""
     assert_includes updated, "url \"#{cask_url(NEW_SHA)}\""
+    assert_includes updated, "sha256 \"#{NEW_SHA}\"\n\n  url"
 
     second_stdout, second_stderr, second_status = run_updater
     assert second_status.success?, second_stderr
     assert_includes second_stdout, "updated=false\n"
+  end
+
+  def test_newer_universal_release_updates_version_sha_and_url
+    version = "1.1.0"
+    file_name = "Hyper VPN_#{version}_universal.dmg"
+    url = download_url(version, NEW_SHA, variant: "universal")
+    write_metadata(version: version, sha: NEW_SHA, file_name: file_name, url: url)
+
+    stdout, stderr, status = run_updater
+
+    assert status.success?, stderr
+    assert_includes stdout, "updated=true\n"
+    updated = File.read(@cask_path)
+    assert_includes updated, 'version "1.1.0"'
+    assert_includes updated, "sha256 \"#{NEW_SHA}\""
+    assert_includes updated, "url \"#{cask_url(NEW_SHA, variant: "universal")}\""
   end
 
   def test_same_version_with_different_artifact_is_rejected
@@ -147,17 +164,23 @@ class UpdateCaskTest < Minitest::Test
 
         url "#{url}"
         name "Hyper VPN"
+
+        livecheck do
+          url "https://hypervpn.app/v1/public/app/latest?platform=macos"
+          strategy :json
+        end
+
         app "Hyper VPN.app"
       end
     RUBY
   end
 
-  def download_url(version, sha)
-    "https://dl.hypervpn.app/ladder/macos/1/#{sha[0, 12]}/Hyper%20VPN_#{version}_arm64.dmg"
+  def download_url(version, sha, variant: "arm64")
+    "https://dl.hypervpn.app/ladder/macos/1/#{sha[0, 12]}/Hyper%20VPN_#{version}_#{variant}.dmg"
   end
 
-  def cask_url(sha)
-    "https://dl.hypervpn.app/ladder/macos/1/#{sha[0, 12]}/Hyper%20VPN_\#{version}_arm64.dmg"
+  def cask_url(sha, variant: "arm64")
+    "https://dl.hypervpn.app/ladder/macos/1/#{sha[0, 12]}/Hyper%20VPN_\#{version}_#{variant}.dmg"
   end
 
   def metadata(version: "1.0.0", sha: CURRENT_SHA, platform: "macos", file_name: nil, url: nil)

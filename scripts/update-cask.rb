@@ -15,6 +15,7 @@ module HyperVpnCaskUpdater
   ROOT = File.expand_path("..", __dir__).freeze
   DEFAULT_CASK = File.join(ROOT, "Casks/hyper-vpn.rb").freeze
   VERSION_INTERPOLATION = "\#{version}"
+  ARTIFACT_VARIANTS = %w[arm64 universal].freeze
 
   # Raised when upstream metadata or the local cask is invalid.
   class UpdateError < StandardError; end
@@ -87,8 +88,10 @@ module HyperVpnCaskUpdater
     sha = sha.downcase
 
     file_name = data["file_name"]
-    expected_file_name = "Hyper VPN_#{version}_arm64.dmg"
-    raise UpdateError, "file_name must be #{expected_file_name.inspect}" if file_name != expected_file_name
+    expected_file_names = ARTIFACT_VARIANTS.map { |variant| "Hyper VPN_#{version}_#{variant}.dmg" }
+    unless expected_file_names.include?(file_name)
+      raise UpdateError, "file_name must be one of #{expected_file_names.map(&:inspect).join(", ")}"
+    end
 
     url = data["download_url"]
     uri = parse_download_uri(url)
@@ -99,9 +102,10 @@ module HyperVpnCaskUpdater
     valid_filename = uri.query.nil? && uri.fragment.nil? && decoded_name == file_name
     raise UpdateError, "download_url filename must match file_name" unless valid_filename
 
-    cask_url = url.sub(/#{Regexp.escape(version)}(?=_arm64\.dmg\z)/, VERSION_INTERPOLATION)
+    variant_pattern = Regexp.union(ARTIFACT_VARIANTS)
+    cask_url = url.sub(/#{Regexp.escape(version)}(?=_(?:#{variant_pattern})\.dmg\z)/, VERSION_INTERPOLATION)
     if cask_url == url
-      raise UpdateError, "download_url does not contain versioned arm64 filename"
+      raise UpdateError, "download_url does not contain a supported versioned filename"
     end
 
     { version: version, sha: sha, url: url, cask_url: cask_url }
@@ -114,9 +118,9 @@ module HyperVpnCaskUpdater
   end
 
   def current_release(cask)
-    version = cask[/^\s*version\s+"([^"]+)"\s*$/, 1]
-    sha = cask[/^\s*sha256\s+"([0-9a-fA-F]{64})"\s*$/, 1]
-    url = cask[/^\s*url\s+"([^"]+)"\s*$/, 1]
+    version = cask[/^[ \t]*version\s+"([^"]+)"[ \t]*$/, 1]
+    sha = cask[/^[ \t]*sha256\s+"([0-9a-fA-F]{64})"[ \t]*$/, 1]
+    url = cask[/^[ \t]*url\s+"([^"]+)"[ \t]*$/, 1]
     if [version, sha, url].any?(&:nil?)
       raise UpdateError, "cask must contain one literal version, sha256, and url"
     end
@@ -136,10 +140,11 @@ module HyperVpnCaskUpdater
 
   def atomic_update(path, release)
     original = File.read(path)
-    updated = replace_once!(original, /^(\s*)version\s+"[^"]+"\s*$/, "\\1version \"#{release[:version]}\"", "version")
-    sha_pattern = /^(\s*)sha256\s+"[0-9a-fA-F]{64}"\s*$/
+    version_pattern = /^([ \t]*)version\s+"[^"]+"[ \t]*$/
+    updated = replace_once!(original, version_pattern, "\\1version \"#{release[:version]}\"", "version")
+    sha_pattern = /^([ \t]*)sha256\s+"[0-9a-fA-F]{64}"[ \t]*$/
     updated = replace_once!(updated, sha_pattern, "\\1sha256 \"#{release[:sha]}\"", "sha256")
-    updated = replace_once!(updated, /^(\s*)url\s+"[^"]+"\s*$/, "\\1url \"#{release[:cask_url]}\"", "url")
+    updated = replace_once!(updated, /^(  )url\s+"[^"]+"[ \t]*$/, "\\1url \"#{release[:cask_url]}\"", "url")
 
     expanded_path = File.expand_path(path)
     directory = File.dirname(expanded_path)
