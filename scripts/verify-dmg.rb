@@ -25,6 +25,7 @@ module HyperVpnDmgVerification
   # Validates checksum, metadata, architecture, signature, and notarization.
   class DmgVerifier
     APP_NAME = "Hyper VPN.app"
+    TEAM_ID = "3YNVW8CLGX"
 
     def initialize(dmg:, version:, sha256:, runner: CommandRunner.new)
       @dmg = File.expand_path(dmg)
@@ -97,6 +98,12 @@ module HyperVpnDmgVerification
       end
 
       run!("codesign", "--verify", "--deep", "--strict", "--verbose=2", app)
+      signature = run!("codesign", "--display", "--verbose=4", app)
+      signature_output = [signature.stdout, signature.stderr].join("\n")
+      unless signature_output.lines.any? { |line| line.strip == "TeamIdentifier=#{TEAM_ID}" }
+        raise VerificationError, "app is not signed by expected team #{TEAM_ID}"
+      end
+
       assessment = run!("spctl", "--assess", "--type", "execute", "--verbose=2", app)
       assessment_output = [assessment.stdout, assessment.stderr].join("\n")
       return if assessment_output.include?("source=Notarized Developer ID")

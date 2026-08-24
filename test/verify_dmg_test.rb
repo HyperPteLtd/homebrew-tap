@@ -16,6 +16,7 @@ class DmgVerifierTest < Minitest::Test
       version: "1.0.0",
       executable: "Hyper VPN",
       architectures: "arm64",
+      team_id: "3YNVW8CLGX",
       notarization_source: "Notarized Developer ID",
       failures: {}
     )
@@ -23,6 +24,7 @@ class DmgVerifierTest < Minitest::Test
       @version = version
       @executable = executable
       @architectures = architectures
+      @team_id = team_id
       @notarization_source = notarization_source
       @failures = failures
       @commands = []
@@ -42,6 +44,8 @@ class DmgVerifierTest < Minitest::Test
         result("#{@executable}\n")
       when "lipo"
         result("#{@architectures}\n")
+      when "codesign-info"
+        result("", "TeamIdentifier=#{@team_id}\n")
       when "spctl"
         result("", "accepted\nsource=#{@notarization_source}\n")
       else
@@ -57,6 +61,7 @@ class DmgVerifierTest < Minitest::Test
       return "detach" if command[0..1] == ["hdiutil", "detach"]
       return "version" if command.include?("Print :CFBundleShortVersionString")
       return "executable" if command.include?("Print :CFBundleExecutable")
+      return "codesign-info" if command[0..1] == ["codesign", "--display"]
 
       command.first
     end
@@ -127,6 +132,14 @@ class DmgVerifierTest < Minitest::Test
 
     error = assert_raises(HyperVpnDmgVerification::VerificationError) { verifier(runner).verify! }
     assert_match(/codesign failed: invalid signature/, error.message)
+    assert_includes runner.commands, ["hdiutil", "detach", @mount]
+  end
+
+  def test_rejects_app_signed_by_unexpected_team_and_detaches
+    runner = FakeRunner.new(mount_point: @mount, team_id: "ABCDEFGHIJ")
+
+    error = assert_raises(HyperVpnDmgVerification::VerificationError) { verifier(runner).verify! }
+    assert_match(/not signed by expected team/, error.message)
     assert_includes runner.commands, ["hdiutil", "detach", @mount]
   end
 

@@ -1,8 +1,8 @@
 cask "hyper-vpn" do
   version "1.1.5"
-  sha256 "da1d6b17314d0c3cfa54d69faa3d9df909173808657ee963fb471bdc0185088e"
+  sha256 "20122d8e7c3bed2b934e2f745ba40f9b517af76fa8acb459516a083b8c6a7711"
 
-  url "https://dl.hypervpn.app/ladder/macos/10/da1d6b17314d/Hyper%20VPN_#{version}_universal.dmg"
+  url "https://dl.hypervpn.app/ladder/macos/11/20122d8e7c3b/Hyper%20VPN_#{version}_universal.dmg"
   name "Hyper VPN"
   desc "VPN client by Hyper Network"
   homepage "https://hypervpn.app/"

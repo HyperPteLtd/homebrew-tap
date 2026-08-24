@@ -15,7 +15,6 @@ module HyperVpnCaskUpdater
   ROOT = File.expand_path("..", __dir__).freeze
   DEFAULT_CASK = File.join(ROOT, "Casks/hyper-vpn.rb").freeze
   VERSION_INTERPOLATION = "\#{version}"
-  ARTIFACT_VARIANTS = %w[arm64 universal].freeze
 
   # Raised when upstream metadata or the local cask is invalid.
   class UpdateError < StandardError; end
@@ -79,6 +78,10 @@ module HyperVpnCaskUpdater
     raise UpdateError, "version_name must be a string" unless version.is_a?(String)
     raise UpdateError, "version_name must be a numeric dotted version" unless version.match?(/\A\d+(?:\.\d+)*\z/)
 
+    version_code = data["version_code"]
+    valid_version_code = version_code.is_a?(Integer) && version_code.positive?
+    raise UpdateError, "version_code must be a positive integer" unless valid_version_code
+
     sha = data["sha256"]
     raise UpdateError, "sha256 must be a string" unless sha.is_a?(String)
     unless sha.match?(/\A[0-9a-f]{64}\z/i)
@@ -88,9 +91,10 @@ module HyperVpnCaskUpdater
     sha = sha.downcase
 
     file_name = data["file_name"]
-    expected_file_names = ARTIFACT_VARIANTS.map { |variant| "Hyper VPN_#{version}_#{variant}.dmg" }
-    unless expected_file_names.include?(file_name)
-      raise UpdateError, "file_name must be one of #{expected_file_names.map(&:inspect).join(", ")}"
+    variant_pattern = /[A-Za-z0-9][A-Za-z0-9_-]*/
+    expected_file_name = /\AHyper VPN_#{Regexp.escape(version)}_#{variant_pattern}\.dmg\z/
+    unless expected_file_name.match?(file_name)
+      raise UpdateError, "file_name must contain the exact version and an artifact variant"
     end
 
     url = data["download_url"]
@@ -102,13 +106,17 @@ module HyperVpnCaskUpdater
     valid_filename = uri.query.nil? && uri.fragment.nil? && decoded_name == file_name
     raise UpdateError, "download_url filename must match file_name" unless valid_filename
 
-    variant_pattern = Regexp.union(ARTIFACT_VARIANTS)
-    cask_url = url.sub(/#{Regexp.escape(version)}(?=_(?:#{variant_pattern})\.dmg\z)/, VERSION_INTERPOLATION)
+    expected_path_prefix = ["", "ladder", "macos", version_code.to_s, sha[0, 12]]
+    path_parts = uri.path.split("/")
+    valid_path = path_parts.length == 6 && path_parts.first(5) == expected_path_prefix
+    raise UpdateError, "download_url path must match version_code and sha256" unless valid_path
+
+    cask_url = url.sub(/#{Regexp.escape(version)}(?=_#{variant_pattern}\.dmg\z)/, VERSION_INTERPOLATION)
     if cask_url == url
       raise UpdateError, "download_url does not contain a supported versioned filename"
     end
 
-    { version: version, sha: sha, url: url, cask_url: cask_url }
+    { version: version, version_code: version_code, sha: sha, url: url, cask_url: cask_url }
   end
 
   def parse_download_uri(url)
@@ -126,7 +134,11 @@ module HyperVpnCaskUpdater
     end
 
     expanded_url = url.gsub(VERSION_INTERPOLATION, version)
-    { version: version, sha: sha.downcase, url: expanded_url, cask_url: url }
+    uri = parse_download_uri(expanded_url)
+    version_code = uri.path[%r{\A/ladder/macos/(\d+)/}, 1]
+    raise UpdateError, "cask URL must contain a numeric version code" unless version_code
+
+    { version: version, version_code: version_code.to_i, sha: sha.downcase, url: expanded_url, cask_url: url }
   end
 
   def replace_once!(contents, pattern, replacement, field)
@@ -177,11 +189,16 @@ module HyperVpnCaskUpdater
       raise UpdateError, "refusing downgrade from #{current[:version]} to #{release[:version]}"
     end
 
-    updated = !comparison.zero?
+    version_code_comparison = release[:version_code] <=> current[:version_code]
+    if comparison.zero? && version_code_comparison.negative?
+      raise UpdateError,
+            "refusing build downgrade from #{current[:version_code]} to #{release[:version_code]}"
+    end
+
+    artifact_changed = release[:sha] != current[:sha] || release[:url] != current[:url]
+    updated = comparison.positive? || (comparison.zero? && artifact_changed)
     if updated
       atomic_update(options[:cask], release)
-    elsif release[:sha] != current[:sha] || release[:url] != current[:url]
-      raise UpdateError, "version #{release[:version]} was repackaged; refusing to overwrite the cask"
     end
 
     output = { updated: updated, version: release[:version], url: release[:url], sha: release[:sha] }
