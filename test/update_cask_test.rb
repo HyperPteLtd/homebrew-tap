@@ -208,6 +208,57 @@ class UpdateCaskTest < Minitest::Test
     assert_includes stderr, "refusing downgrade"
   end
 
+  def test_older_version_with_newer_build_can_be_skipped
+    File.write(@cask_path, cask("1.1.6", CURRENT_SHA, cask_url(CURRENT_SHA, version_code: 18)))
+    original = File.binread(@cask_path)
+    write_metadata(version: "1.1.0", version_code: 22, sha: NEW_SHA)
+    output_path = File.join(@directory, "github-output")
+
+    stdout, stderr, status = run_updater("--skip-downgrade", "--github-output", output_path)
+
+    assert status.success?, stderr
+    assert_includes stderr, "refusing downgrade from 1.1.6 to 1.1.0"
+    assert_includes stdout, "updated=false\n"
+    assert_includes stdout, "version=1.1.6\n"
+    assert_includes stdout, "sha=#{CURRENT_SHA}\n"
+    assert_equal stdout, File.read(output_path)
+    assert_equal original, File.binread(@cask_path)
+  end
+
+  def test_older_build_can_be_skipped
+    File.write(@cask_path, cask("1.0.0", NEW_SHA, cask_url(NEW_SHA, version_code: 2)))
+    original = File.binread(@cask_path)
+    write_metadata(version_code: 1)
+
+    stdout, stderr, status = run_updater("--skip-downgrade")
+
+    assert status.success?, stderr
+    assert_includes stderr, "refusing build downgrade from 2 to 1"
+    assert_includes stdout, "updated=false\n"
+    assert_equal original, File.binread(@cask_path)
+  end
+
+  def test_skip_downgrade_still_rejects_invalid_metadata
+    write_metadata(version: "0.9.0", sha: "invalid")
+    original = File.binread(@cask_path)
+
+    _stdout, stderr, status = run_updater("--skip-downgrade")
+
+    refute status.success?
+    assert_includes stderr, "64 hexadecimal"
+    assert_equal original, File.binread(@cask_path)
+  end
+
+  def test_skip_downgrade_still_updates_newer_releases
+    write_metadata(version: "1.1.0", sha: NEW_SHA)
+
+    stdout, stderr, status = run_updater("--skip-downgrade")
+
+    assert status.success?, stderr
+    assert_includes stdout, "updated=true\n"
+    assert_includes File.read(@cask_path), 'version "1.1.0"'
+  end
+
   private
 
   def cask(version, sha, url)

@@ -38,7 +38,7 @@ jobs:
 
       - name: Update cask metadata
         id: update
-        run: ruby scripts/update-cask.rb --github-output "$GITHUB_OUTPUT"
+        run: ruby scripts/update-cask.rb --skip-downgrade --github-output "$GITHUB_OUTPUT"
 
       - name: Download updated DMG
         if: steps.update.outputs.updated == 'true'

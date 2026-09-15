@@ -38,7 +38,9 @@ brew livecheck HyperPteLtd/tap/hyper-vpn
 
 本仓库的 GitHub Actions 与 `Homebrew/homebrew-cask` 官方 autobump 使用相同计划：每 3 小时、UTC 第 23 分钟查询 Hyper VPN 官方版本接口。发现新版本后，自动化任务会下载并验证 DMG 的校验和、应用版本、arm64 架构、Developer ID 签名和 Apple 公证状态；全部检查通过后才会更新 cask 并提交到 `main`。
 
-cask 会持续通过 Homebrew 官方的 `test-bot`、`brew style`、`brew audit --new --online` 和 `brew livecheck` 检查，以保持未来提交至 `Homebrew/homebrew-cask` 的兼容性。
+如果上游返回更旧的版本，或同一版本的更旧构建，定时更新会记录警告并保留当前 cask。手动运行更新脚本时仍会拒绝降级，除非指定 `--skip-downgrade`。无效的版本元数据仍会导致验证失败。
+
+cask 会持续通过 Homebrew 官方的 `test-bot`、`brew style` 和在线审核检查。CI 从审核中排除 `livecheck_version` 和同样会检查版本相等的 `livecheck_https_availability`，并单独通过 HTTPS 运行 `brew livecheck`，避免上游版本回退导致代码验证失败。自动更新发布前仍须通过完整的 `brew audit --new --online` 检查。
 
 ## 卸载
 

@@ -23,10 +23,11 @@ module HyperVpnCaskUpdater
 
   def parse_options
     options = {
-      api_url:       ENV.fetch("HYPER_VPN_API_URL", API_URL),
-      metadata_file: ENV.fetch("HYPER_VPN_METADATA_FILE", nil),
-      cask:          DEFAULT_CASK,
-      github_output: ENV.fetch("GITHUB_OUTPUT", nil),
+      api_url:        ENV.fetch("HYPER_VPN_API_URL", API_URL),
+      metadata_file:  ENV.fetch("HYPER_VPN_METADATA_FILE", nil),
+      cask:           DEFAULT_CASK,
+      github_output:  ENV.fetch("GITHUB_OUTPUT", nil),
+      skip_downgrade: false,
     }
 
     OptionParser.new do |parser|
@@ -36,6 +37,9 @@ module HyperVpnCaskUpdater
         options[:metadata_file] = value
       end
       parser.on("--cask PATH", "Cask file to update") { |value| options[:cask] = value }
+      parser.on("--skip-downgrade", "Leave the cask unchanged when upstream returns an older release") do
+        options[:skip_downgrade] = true
+      end
       parser.on("--github-output PATH", "Append outputs to a GitHub Actions output file") do |value|
         options[:github_output] = value
       end
@@ -185,14 +189,19 @@ module HyperVpnCaskUpdater
     release = validated_release(fetch_metadata(options))
     comparison = Gem::Version.new(release[:version]) <=> Gem::Version.new(current[:version])
 
-    if comparison.negative?
-      raise UpdateError, "refusing downgrade from #{current[:version]} to #{release[:version]}"
-    end
-
     version_code_comparison = release[:version_code] <=> current[:version_code]
-    if comparison.zero? && version_code_comparison.negative?
-      raise UpdateError,
-            "refusing build downgrade from #{current[:version_code]} to #{release[:version_code]}"
+    downgrade = if comparison.negative?
+      "refusing downgrade from #{current[:version]} to #{release[:version]}"
+    elsif comparison.zero? && version_code_comparison.negative?
+      "refusing build downgrade from #{current[:version_code]} to #{release[:version_code]}"
+    end
+    if downgrade
+      raise UpdateError, downgrade unless options[:skip_downgrade]
+
+      warn "update-cask: #{downgrade}; keeping the current cask"
+      output = { updated: false, version: current[:version], url: current[:url], sha: current[:sha] }
+      emit_outputs(output, options[:github_output])
+      return
     end
 
     artifact_changed = release[:sha] != current[:sha] || release[:url] != current[:url]

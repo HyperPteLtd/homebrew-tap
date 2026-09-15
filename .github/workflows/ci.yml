@@ -53,7 +53,13 @@ jobs:
             test/update_cask_test.rb test/verify_dmg_test.rb
 
       - name: Audit cask
-        run: brew audit --cask --new --online HyperPteLtd/tap/hyper-vpn
+        # Upstream may temporarily return an older version. Report it in the
+        # livecheck step; the updater enforces version ordering before publishing.
+        # The HTTPS audit also invokes the version-equality audit internally.
+        run: >-
+          brew audit --cask --new --online
+          --except=livecheck_version,livecheck_https_availability
+          HyperPteLtd/tap/hyper-vpn
 
       - name: Check latest version
         run: brew livecheck --cask HyperPteLtd/tap/hyper-vpn

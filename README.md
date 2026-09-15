@@ -38,7 +38,9 @@ brew livecheck HyperPteLtd/tap/hyper-vpn
 
 A GitHub Actions workflow follows the same schedule as the official `Homebrew/homebrew-cask` autobump: every three hours at minute 23 UTC. When a new version is available, it downloads the DMG and verifies its checksum, application version, arm64 architecture, Developer ID signature, and Apple notarization. The cask is updated and committed to `main` only after every check succeeds.
 
-The cask is continuously checked with Homebrew's official `test-bot`, `brew style`, `brew audit --new --online`, and `brew livecheck` tooling so it stays suitable for a future submission to `Homebrew/homebrew-cask`.
+If upstream returns an older version or an older build of the same version, the scheduled updater logs a warning and leaves the cask unchanged. Manual updater runs reject downgrades unless `--skip-downgrade` is supplied. Invalid metadata still fails validation.
+
+The cask is continuously checked with Homebrew's official `test-bot`, `brew style`, and online audit tooling. CI excludes `livecheck_version` and `livecheck_https_availability` (which also checks version equality) from the audit and runs `brew livecheck` separately over HTTPS, so an upstream version rollback does not fail code validation. Automated updates still require the full `brew audit --new --online` check before publishing.
 
 ## Uninstall
 
