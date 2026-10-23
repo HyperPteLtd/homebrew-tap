@@ -96,8 +96,12 @@ module HyperVpnCaskUpdater
 
     file_name = data["file_name"]
     variant_pattern = /[A-Za-z0-9][A-Za-z0-9_-]*/
-    expected_file_name = /\AHyper VPN_#{Regexp.escape(version)}_#{variant_pattern}\.dmg\z/
-    unless expected_file_name.match?(file_name)
+    escaped_version = Regexp.escape(version)
+    legacy_file_name = /\AHyper VPN_#{escaped_version}_#{variant_pattern}\.dmg\z/
+    current_file_name = /\AHyperVPN-#{escaped_version}-macos-#{variant_pattern}\.dmg\z/
+    valid_file_name = file_name.is_a?(String) &&
+                      (legacy_file_name.match?(file_name) || current_file_name.match?(file_name))
+    unless valid_file_name
       raise UpdateError, "file_name must contain the exact version and an artifact variant"
     end
 
@@ -115,7 +119,8 @@ module HyperVpnCaskUpdater
     valid_path = path_parts.length == 6 && path_parts.first(5) == expected_path_prefix
     raise UpdateError, "download_url path must match version_code and sha256" unless valid_path
 
-    cask_url = url.sub(/#{Regexp.escape(version)}(?=_#{variant_pattern}\.dmg\z)/, VERSION_INTERPOLATION)
+    version_pattern = /#{escaped_version}(?=(?:_|-macos-)#{variant_pattern}\.dmg\z)/
+    cask_url = url.sub(version_pattern, VERSION_INTERPOLATION)
     if cask_url == url
       raise UpdateError, "download_url does not contain a supported versioned filename"
     end

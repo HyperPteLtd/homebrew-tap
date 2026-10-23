@@ -84,6 +84,43 @@ class UpdateCaskTest < Minitest::Test
     assert_includes File.read(@cask_path), "url \"#{cask_url(NEW_SHA, variant: variant)}\""
   end
 
+  def test_new_macos_filename_updates_and_is_idempotent
+    version = "1.2.3"
+    file_name = "HyperVPN-#{version}-macos-arm64.dmg"
+    url = "https://dl.hypervpn.app/ladder/macos/28/#{NEW_SHA[0, 12]}/#{file_name}"
+    write_metadata(version: version, version_code: 28, sha: NEW_SHA, file_name: file_name, url: url)
+
+    stdout, stderr, status = run_updater
+
+    assert status.success?, stderr
+    assert_includes stdout, "updated=true\n"
+    updated = File.read(@cask_path)
+    assert_includes updated, 'version "1.2.3"'
+    assert_includes updated, "sha256 \"#{NEW_SHA}\""
+    assert_includes updated, "HyperVPN-\#{version}-macos-arm64.dmg"
+
+    second_stdout, second_stderr, second_status = run_updater
+    assert second_status.success?, second_stderr
+    assert_includes second_stdout, "updated=false\n"
+    assert_equal updated, File.read(@cask_path)
+  end
+
+  def test_new_filename_rejects_wrong_version_platform_and_unsafe_variant
+    original = File.read(@cask_path)
+    ["HyperVPN-1.0.1-macos-arm64.dmg", "HyperVPN-1.0.0-windows-arm64.dmg",
+     "HyperVPN-1.0.0-macos-../arm64.dmg", "HyperVPN-1.0.0-macos-.dmg", 123, nil].each do |file_name|
+      payload = metadata
+      payload["data"]["file_name"] = file_name
+      File.write(@metadata_path, JSON.generate(payload))
+
+      _stdout, stderr, status = run_updater
+
+      refute status.success?, file_name.inspect
+      assert_includes stderr, "file_name must contain the exact version and an artifact variant"
+      assert_equal original, File.read(@cask_path)
+    end
+  end
+
   def test_same_version_and_build_with_different_artifact_is_updated
     write_metadata(sha: NEW_SHA)
 
