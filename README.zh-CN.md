@@ -3,12 +3,12 @@
 [![CI](https://github.com/HyperPteLtd/homebrew-tap/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/HyperPteLtd/homebrew-tap/actions/workflows/ci.yml?query=branch%3Amain)
 [![Update Hyper VPN cask](https://github.com/HyperPteLtd/homebrew-tap/actions/workflows/auto-update.yml/badge.svg)](https://github.com/HyperPteLtd/homebrew-tap/actions/workflows/auto-update.yml)
 [![Homebrew Tap](https://img.shields.io/badge/Homebrew-Tap-FBB040?logo=homebrew&logoColor=white)](https://brew.sh/)
-![macOS 13+](https://img.shields.io/badge/macOS-13%2B-000000?logo=apple&logoColor=white)
+![macOS 15+](https://img.shields.io/badge/macOS-15%2B-000000?logo=apple&logoColor=white)
 ![Architecture arm64](https://img.shields.io/badge/architecture-arm64-blue)
 
 [English](README.md) · 简体中文
 
-这是 [Hyper VPN](https://hypervpn.app/) 的官方 Homebrew Tap，目前仅支持 Apple Silicon Mac，并要求 macOS Ventura 13 或更高版本。
+这是 [Hyper VPN](https://hypervpn.app/) 的官方 Homebrew Tap，目前仅支持 Apple Silicon Mac，并要求 macOS Sequoia 15 或更高版本。
 
 ## 安装
 

@@ -17,7 +17,6 @@ class DmgVerifierTest < Minitest::Test
       executable: "Hyper VPN",
       architectures: "arm64",
       team_id: "3YNVW8CLGX",
-      notarization_source: "Notarized Developer ID",
       failures: {}
     )
       @mount_point = mount_point
@@ -25,7 +24,6 @@ class DmgVerifierTest < Minitest::Test
       @executable = executable
       @architectures = architectures
       @team_id = team_id
-      @notarization_source = notarization_source
       @failures = failures
       @commands = []
     end
@@ -46,8 +44,6 @@ class DmgVerifierTest < Minitest::Test
         result("#{@architectures}\n")
       when "codesign-info"
         result("", "TeamIdentifier=#{@team_id}\n")
-      when "spctl"
-        result("", "accepted\nsource=#{@notarization_source}\n")
       else
         result
       end
@@ -62,6 +58,7 @@ class DmgVerifierTest < Minitest::Test
       return "version" if command.include?("Print :CFBundleShortVersionString")
       return "executable" if command.include?("Print :CFBundleExecutable")
       return "codesign-info" if command[0..1] == ["codesign", "--display"]
+      return "notarization" if command.include?("--check-notarization")
 
       command.first
     end
@@ -92,7 +89,8 @@ class DmgVerifierTest < Minitest::Test
 
     assert verifier(runner).verify!
     assert_includes runner.commands, ["codesign", "--verify", "--deep", "--strict", "--verbose=2", @app]
-    assert_includes runner.commands, ["spctl", "--assess", "--type", "execute", "--verbose=2", @app]
+    assert_includes runner.commands, ["codesign", "--verify", "-R=notarized", "--check-notarization", @app]
+    assert_includes runner.commands, ["syspolicy_check", "distribution", @app]
     assert_includes runner.commands, ["hdiutil", "detach", @mount]
   end
 
@@ -143,11 +141,21 @@ class DmgVerifierTest < Minitest::Test
     assert_includes runner.commands, ["hdiutil", "detach", @mount]
   end
 
-  def test_rejects_successful_assessment_without_notarization_and_detaches
-    runner = FakeRunner.new(mount_point: @mount, notarization_source: "Developer ID")
+  def test_rejects_missing_notarization_and_detaches
+    runner = FakeRunner.new(mount_point: @mount, failures: { "notarization" => "not notarized" })
 
     error = assert_raises(HyperVpnDmgVerification::VerificationError) { verifier(runner).verify! }
-    assert_match(/not a notarized Developer ID/, error.message)
+    assert_match(/codesign failed: not notarized/, error.message)
+    refute_includes runner.commands, ["syspolicy_check", "distribution", @app]
+    assert_includes runner.commands, ["hdiutil", "detach", @mount]
+  end
+
+  def test_rejects_distribution_failure_even_when_notarized_and_detaches
+    runner = FakeRunner.new(mount_point: @mount, failures: { "syspolicy_check" => "Gatekeeper rejected the app" })
+
+    error = assert_raises(HyperVpnDmgVerification::VerificationError) { verifier(runner).verify! }
+    assert_match(/syspolicy_check failed: Gatekeeper rejected the app/, error.message)
+    assert_includes runner.commands, ["codesign", "--verify", "-R=notarized", "--check-notarization", @app]
     assert_includes runner.commands, ["hdiutil", "detach", @mount]
   end
 

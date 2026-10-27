@@ -104,11 +104,10 @@ module HyperVpnDmgVerification
         raise VerificationError, "app is not signed by expected team #{TEAM_ID}"
       end
 
-      assessment = run!("spctl", "--assess", "--type", "execute", "--verbose=2", app)
-      assessment_output = [assessment.stdout, assessment.stderr].join("\n")
-      return if assessment_output.include?("source=Notarized Developer ID")
-
-      raise VerificationError, "app is not a notarized Developer ID application"
+      run!("codesign", "--verify", "-R=notarized", "--check-notarization", app)
+      # Use the app distribution check on the macOS 26 runner, including
+      # Gatekeeper, XProtect, and provisioning checks, rather than spctl text.
+      run!("syspolicy_check", "distribution", app)
     end
 
     def plist_value(plist, key)
